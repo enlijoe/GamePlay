@@ -12,13 +12,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import com.jgr.game.vac.interfaces.SmartThings;
-
-public class WatchDog extends Thread implements SmartThings {
-	@Autowired private Esp32Impl esp32;
-	@Autowired private SmartThingsImpl smartThings;
-	@Autowired private DeviceNames deviceNames;
-
+public class WatchDog extends Thread {
+	@Autowired private RemoteWatchDog[] remoteWatchDogs;
+	
 	public class MaxTime {
 		private long endTime;
 		private Runnable expiredTimerAction;
@@ -54,8 +50,8 @@ public class WatchDog extends Thread implements SmartThings {
 	private Logger logger = LoggerFactory.getLogger(WatchDog.class);
 
 	SimpleDateFormat formatter = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss.SSS");
-	boolean saftyValveState = false;
-	boolean knownSaftyValveState = false;
+	boolean watchDogState = false;
+	boolean remoteStatus = false;
 	List<WatchTimer> timerList = new ArrayList<>();
 	List<MaxTime> maxTimerList = new ArrayList<>();
 	boolean running = false;
@@ -74,25 +70,27 @@ public class WatchDog extends Thread implements SmartThings {
 		return running && watchDogKicking; 
 	}
 	
+	// start the watchdog thread and wait for it to get started
 	public void init() throws IOException {
 		if(!running) {
-			logger.info("Starting the watch dog manager");
+			logger.info("Starting the watch dog manager.");
 			timeToCheckIn = 5 * 60 * 1000;
 			espCheckTime = 1 * 60 * 1000;
 			start();
 			
 			try {
 				for(int count = 0; count < 60 && !running; count++) sleep(1000);
+				logger.info("Watch dog manager has started.");
 			} catch(InterruptedException iex) {
 				logger.warn("Inturrpted while waiting for watch dog thread to start");
 			}
 		}
 	}
 	
-	public void setSaftyValveState(boolean saftyValveState) {
-		logger.info("Safety Valve set to " + saftyValveState);
+	public void setEnabled(boolean state) {
+		logger.info("Watchgod set to " + state);
 		if(isAliveAndKicking()) {
-			this.saftyValveState = saftyValveState;
+			this.watchDogState = state;
 			this.interrupt();
 		} else {
 			throw new IllegalStateException("Not allowed while the Watch Dog is not running");
@@ -102,8 +100,6 @@ public class WatchDog extends Thread implements SmartThings {
 	public WatchDog() throws IOException {
 		running = false;
 		setName("WatchDog");
-		smartThings = new SmartThingsImpl();
-		esp32 = new Esp32Impl();
 	}
 	
 	public void removeTimer(WatchTimer timer) {
@@ -144,54 +140,17 @@ public class WatchDog extends Thread implements SmartThings {
 		logger.info("Max time removed for " + timer.reason);
 	}
 	
-	public void listAllDevices() {
-		if(isAliveAndKicking()) {
-			smartThings.listAllDevices();
-		} else {
-			throw new IllegalStateException("Not allowed while the Watch Dog is not running");
-		}
-	}
-
-	public int getSwitchState(String id) {
-		if(isAliveAndKicking()) {
-			return smartThings.getSwitchState(id);
-		} else {
-			throw new IllegalStateException("Not allowed while the Watch Dog is not running");
-		}
-	}
-
-	public void setDeviceState(String id, boolean state) {
-		if(isAliveAndKicking()) {
-			smartThings.setDeviceState(id, state);
-		} else {
-			throw new IllegalStateException("Monitor thread not running");
-		}
-	}
-
-	public boolean isOn(int value) {
-		if(isAliveAndKicking()) {
-			return smartThings.isOn(value);
-		} else {
-			throw new IllegalStateException("Not allowed while the Watch Dog is not running");
-		}
-	}
-
-	public boolean isOff(int value) {
-		if(isAliveAndKicking()) {
-			return smartThings.isOff(value);
-		} else {
-			throw new IllegalStateException("Not allowed while the Watch Dog is not running");
-		}
-	}
 
 	@Override
 	public void run() {
 		nextWatchDogCheck = System.currentTimeMillis() + timeToCheckIn;
-		long nextEspCheck = System.currentTimeMillis() + espCheckTime;
+		long nextRemoteCheckin = System.currentTimeMillis() + espCheckTime;
 		
 		logger.info("Checking the connection to safety value");
-		esp32.getValveStatus();
-
+		internalReset();
+		internalEnable();
+		internalCheckIn();
+		
 		running = true;
 		logger.info("The watch dog is up and running.");
 		while(running) {
@@ -205,6 +164,7 @@ public class WatchDog extends Thread implements SmartThings {
 								timer.checkedin = false;
 							} else {
 								logger.info("A check in has been missed, calling the expired action method");
+								internalErrorState();
 								enterErroredState();
 								timer.expiredTimerAction.run();
 							}
@@ -216,25 +176,20 @@ public class WatchDog extends Thread implements SmartThings {
 						MaxTime timer = itr.next();
 						if(timer.isExpired()) {
 							logger.info("A timer has expired, calling the expired action method");
+							internalErrorState();
 							enterErroredState();
 							timer.expiredTimerAction.run();
 							itr.remove();
 						}
 					}
 				}
-				if(!running || System.currentTimeMillis() > nextEspCheck || (knownSaftyValveState != saftyValveState)) {
-					nextEspCheck = System.currentTimeMillis() + espCheckTime;
-					if(knownSaftyValveState || saftyValveState) {
-						knownSaftyValveState = esp32.getValveStatus();
-						
-						if(knownSaftyValveState != saftyValveState) {
-							if(saftyValveState) {
-								esp32.turnOnValve();
-							} else {
-								esp32.turnOffValve();
-							}
-							knownSaftyValveState = saftyValveState;
-						}
+				if(!running || System.currentTimeMillis() > nextRemoteCheckin || (remoteStatus != watchDogState)) {
+					nextRemoteCheckin = System.currentTimeMillis() + espCheckTime;
+					internalCheckIn();
+					if(internalGetStatus()) {
+						logger.info("something is wrong on a remote");
+						enterErroredState();
+						internalErrorState();
 					}
 				}
 				try {
@@ -256,29 +211,46 @@ public class WatchDog extends Thread implements SmartThings {
 	
 	private void enterErroredState() {
 		running = false;
-		logger.info("Sutting everything down.");
-		esp32.turnOffValve();	
-		saftyValveState = false;	// this may cause the application to turn off the safety value again before exiting
-		turnDeviceOffNoThrow(deviceNames.getProbeSwitch());
-		turnDeviceOffNoThrow(deviceNames.getNipplesSwitch());
-		turnDeviceOffNoThrow(deviceNames.getVibeSwitch());
-		turnDeviceOffNoThrow(deviceNames.getVibe2Switch());
-		turnDeviceOffNoThrow(deviceNames.getPumpSwitch());
-		turnDeviceOffNoThrow(deviceNames.getPumpCheck());
-		turnDeviceOffNoThrow(deviceNames.getWaterValve());
-		turnDeviceOffNoThrow(deviceNames.getStatusLight());
-		turnDeviceOffNoThrow(deviceNames.getWaterHeater());
+		logger.info("Entering error state, sutting everything down.");
+		watchDogState = false;	// this may cause the application to turn off the safety value again before exiting
+		// TODO - we need to exit the app because something is wrong with the system
 	}
 	
-	private void turnDeviceOffNoThrow(String device) {
-		try {
-			smartThings.setDeviceState(device, false);
-		} catch(RuntimeException rex) {
-			logger.error("Error received while entering default state", rex);
-		}
-	}
-
 	public void shutdown() {
 		running = false;
+	}
+	
+	private void internalCheckIn() {
+		for(RemoteWatchDog remoteWatchDog:remoteWatchDogs) {
+			remoteWatchDog.checkIn();
+		}
+	}
+	
+	private boolean internalGetStatus() {
+		for(RemoteWatchDog remoteWatchDog:remoteWatchDogs) {
+			if(remoteWatchDog.getStatus()) {
+				logger.info("Remote " + remoteWatchDog.getDescription() + " reported an error");
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	private void internalReset() {
+		for(RemoteWatchDog remoteWatchDog:remoteWatchDogs) {
+			remoteWatchDog.reset();
+		}
+	}
+	
+	private void internalErrorState() {
+		for(RemoteWatchDog remoteWatchDog:remoteWatchDogs) {
+			remoteWatchDog.errorState();
+		}
+	}
+	
+	private void internalEnable() {
+		for(RemoteWatchDog remoteWatchDog:remoteWatchDogs) {
+			remoteWatchDog.enable();
+		}
 	}
 }

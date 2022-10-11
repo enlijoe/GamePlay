@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.BeanNameAware;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -13,14 +14,52 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.google.gson.Gson;
-import com.jgr.game.vac.interfaces.Esp32;
+import com.jgr.game.vac.interfaces.OutputDevice;
 
-public class Esp32Impl implements Esp32 {
+public class Esp32Impl implements DeviceManager, BeanNameAware, RemoteWatchDog {
 	@Value("${esp32.uri}") private String esp32Uri;
 
 	private Logger logger = LoggerFactory.getLogger(Esp32Impl.class);
 	
+	private String beanName;
+	private TheDevice theDevice = new TheDevice();
+	
 	@Override
+	public void setBeanName(String name) {
+		beanName = name;
+	}
+	
+	private class TheDevice implements OutputDevice {
+		@Override
+		public void setOff() {
+			turnOffValve();
+		}
+		
+		@Override
+		public void setOn() {
+			turnOnValve();
+			
+		}
+		
+		@Override
+		public void setValue(int value) {
+			if(value != 0) {
+				turnOnValve();
+			} else {
+				turnOffValve();
+			}
+		}
+	}
+	
+	@SuppressWarnings("unchecked")
+	@Override
+	public <DeviceType> DeviceType getDevice(DeviceUrl deviceUrl) {
+		if(beanName.equalsIgnoreCase(deviceUrl.getDeviceManagerClass())) {
+			return (DeviceType) theDevice;
+		}
+		return null;
+	}
+	
 	public void turnOnValve() {
 		try {
 			synchronized(this) {
@@ -35,7 +74,6 @@ public class Esp32Impl implements Esp32 {
 		}
 	}
 	
-	@Override
 	public void turnOffValve() {
 		try {
 			synchronized(this) {
@@ -50,7 +88,6 @@ public class Esp32Impl implements Esp32 {
 		}
 	}
 	
-	@Override
 	public boolean getValveStatus() {
 		try {
 			synchronized(this) {
@@ -79,5 +116,44 @@ public class Esp32Impl implements Esp32 {
 		}
 		
 	}
+	@Override
+	public void checkIn() {
+		// TODO Auto-generated method stub
+		
+	}
 	
+	@Override
+	public String getDescription() {
+		return "Old ESP32";
+	}
+	
+	@Override
+	public boolean getStatus() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+	
+	@Override
+	public void reset() {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+	public void disable() {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+	public void enable() {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+	public void errorState() {
+		// TODO Auto-generated method stub
+		
+	}
 }

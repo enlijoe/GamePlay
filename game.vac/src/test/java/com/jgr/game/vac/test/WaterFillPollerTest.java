@@ -51,7 +51,7 @@ public class WaterFillPollerTest {
 		smartThings.setDeviceValue(bedRoomLight, 0);
 		smartThings.setDeviceValue(eStimSwitch, 0);
 		
-		waterFillPoller.setManualControl(true);
+		//waterFillPoller.setManualControl(true);
 		waterFillPoller.init();
 		assertFalse(waterFillPoller.doCheck());
 	}
@@ -62,7 +62,7 @@ public class WaterFillPollerTest {
 		smartThings.setDeviceValue(eStimSwitch, 100);
 		
 		
-		waterFillPoller.setManualControl(true);
+		//waterFillPoller.setManualControl(true);
 		waterFillPoller.init();
 		assertTrue(waterFillPoller.doCheck());
 	}
@@ -73,7 +73,7 @@ public class WaterFillPollerTest {
 		smartThings.setDeviceValue(eStimSwitch, 0);
 		
 		
-		waterFillPoller.setManualControl(false);
+		//waterFillPoller.setManualControl(false);
 		systemTime.setCurrentTime(0);
 		waterFillPoller.init();
 		systemTime.setCurrentTime(waterFillTime*1000+1);
@@ -85,7 +85,7 @@ public class WaterFillPollerTest {
 		smartThings.setDeviceValue(bedRoomLight, 0);
 		smartThings.setDeviceValue(eStimSwitch, 0);
 		
-		waterFillPoller.setManualControl(false);
+		//waterFillPoller.setManualControl(false);
 		systemTime.setCurrentTime(0);
 		waterFillPoller.init();
 		systemTime.setCurrentTime(waterFillTime*1000);
@@ -99,11 +99,11 @@ public class WaterFillPollerTest {
 		smartThings.setDeviceValue(bedRoomLight, 74);
 		smartThings.setDeviceValue(eStimSwitch, 0);
 		
-		waterFillPoller.setManualControl(false);
+		//waterFillPoller.setManualControl(false);
 		waterFillPoller.init();
 		assertTrue(waterFillPoller.doCheck());
 
-		waterFillPoller.setManualControl(true);
+		//waterFillPoller.setManualControl(true);
 		waterFillPoller.init();
 		assertTrue(waterFillPoller.doCheck());
 	}
@@ -113,7 +113,7 @@ public class WaterFillPollerTest {
 		smartThings.setDeviceValue(bedRoomLight, 75);
 		smartThings.setDeviceValue(eStimSwitch, 0);
 		
-		waterFillPoller.setManualControl(false);
+		//waterFillPoller.setManualControl(false);
 		waterFillPoller.init();
 		try {
 			assertFalse(waterFillPoller.doCheck());
@@ -122,7 +122,7 @@ public class WaterFillPollerTest {
 			// this is good
 		}
 
-		waterFillPoller.setManualControl(true);
+		//waterFillPoller.setManualControl(true);
 		waterFillPoller.init();
 		try {
 			assertFalse(waterFillPoller.doCheck());

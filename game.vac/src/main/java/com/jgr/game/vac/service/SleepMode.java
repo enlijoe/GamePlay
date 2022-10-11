@@ -1,24 +1,37 @@
 package com.jgr.game.vac.service;
 
+import javax.annotation.PostConstruct;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
+import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.LightOffPoller;
+import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.PumpOnPoller;
 import com.jgr.game.vac.interfaces.SealCompletePoller;
-import com.jgr.game.vac.interfaces.SmartThings;
 
 public class SleepMode {
-	@Autowired private SmartThings smartThings;
 	@Autowired private PumpOnPoller pumpOnPoller;
 	@Autowired private SealCompletePoller sealCompletePoller;
 	@Autowired private LightOffPoller lightOffPoller;
 	@Autowired private WatchDog watchDog;
-	@Autowired private DeviceNames deviceNames;
+	@Autowired private DeviceMapperService deviceMapperService;
 
 	private Logger logger = LoggerFactory.getLogger(SleepMode.class);
 	private WatchDog.WatchTimer timer;
+	
+	@Value("${deviceUrl.status}") String statusDeviceUrl;
+	@Value("${deviceUrl.pumpSwitch}") String pumpSwitchUrl;
+	@Value("${deviceUrl.pumpCheck}") String pumpCheckUrl;
+	@Value("${deviceUrl.statusLightCheck}") String statusCheckUrl;
+	
+	InputDevice statusDevice;
+	OutputDevice pumpSwitch;
+	OutputDevice pumpCheck;
+	OutputDevice statusCheck;
 	
 	class WatchDogTimerExpired implements Runnable {
 		Thread myThread;
@@ -30,8 +43,7 @@ public class SleepMode {
 		@Override
 		public void run() {
 			try {
-				watchDog.setSaftyValveState(false);
-				smartThings.setDeviceState(deviceNames.getPumpSwitch(), false);
+				pumpSwitch.setOff();
 				myThread.interrupt();
 			} catch(Exception ex) {
 				logger.error("Unable to turn off valve", ex);
@@ -40,47 +52,49 @@ public class SleepMode {
 	}
 	
 	
+	@PostConstruct
+	public void afterPropsSet() {
+		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
+		pumpSwitch = deviceMapperService.getDevice(new DeviceUrl(pumpSwitchUrl));
+		pumpCheck = deviceMapperService.getDevice(new DeviceUrl(pumpCheckUrl));
+		statusCheck = deviceMapperService.getDevice(new DeviceUrl(statusCheckUrl));
+	}
+	
 	public void runProgram() throws InterruptedException {
 		timer = watchDog.addTimer(new WatchDogTimerExpired(), "Main Process");
 
 		try {
 			do {
 				timer.checkin();
-				smartThings.setDeviceState(deviceNames.getPumpSwitch(), false);
+				pumpSwitch.setOn();
 				timer.checkin();
-				smartThings.setDeviceState(deviceNames.getPumpCheck(), false);
+				pumpCheck.setOff();
 				timer.checkin();
 				
 				// the light must be off for things to work
 				lightOffPoller.run(timer);
-	
-				smartThings.setDeviceState(deviceNames.getStatusLight(), true);
+				statusCheck.setOn();
 				timer.checkin();
 
 				// wait for the pump to turn on
 				pumpOnPoller.run(timer);
-				if(smartThings.isOn(smartThings.getSwitchState(deviceNames.getStatusLight()))) {
+				if(statusDevice.isOn()) {
 					continue;
 				}
-				smartThings.setDeviceState(deviceNames.getPumpSwitch(), true);
+				pumpSwitch.setOn();
 				timer.checkin();
 				logger.info("Pump running");
 	
-				smartThings.setDeviceState(deviceNames.getStatusLight(), false);
+				statusCheck.setOff();
 				timer.checkin();
 				sealCompletePoller.run(timer);
 				logger.info("Seal release restarting program.");
 				
 				// turn off pump now and restart
-				smartThings.setDeviceState(deviceNames.getPumpSwitch(), false);
+				pumpSwitch.setOff();
 				timer.checkin();
-				smartThings.setDeviceState(deviceNames.getPumpCheck(), false);
+				pumpCheck.setOff();
 				timer.checkin();
-				try {
-					watchDog.setSaftyValveState(false);
-				} catch(Exception ex) {
-					logger.error("Unable to turn off valve", ex);
-				}
 			} while(true);
 		} catch(InterruptedException iex) {
 			// we have been shutdown so exit

@@ -50,7 +50,7 @@ public class SealCompletePollerTest {
 		smartThings.setDeviceValue(bedRoomLight, 0);
 		sealCompletePoller.init();
 		assertTrue(esp32.readValveStatus());
-		assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
+		// assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
 		assertFalse(sealCompletePoller.doCheck());
 	}
 	
@@ -60,7 +60,7 @@ public class SealCompletePollerTest {
 		smartThings.setDeviceValue(bedRoomLight, 0);
 		sealCompletePoller.init();
 		assertTrue(esp32.readValveStatus());
-		assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
+		// assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
 		smartThings.setDeviceValue(pumpSwitch, 0);
 		assertTrue(sealCompletePoller.doCheck());
 	}
@@ -70,7 +70,7 @@ public class SealCompletePollerTest {
 		smartThings.setDeviceValue(pumpSwitch, 0);
 		smartThings.setDeviceValue(bedRoomLight, 74);
 		sealCompletePoller.init();
-		assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
+		// assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
 		assertTrue(esp32.readValveStatus());
 		assertTrue(sealCompletePoller.doCheck());
 	}
@@ -80,7 +80,7 @@ public class SealCompletePollerTest {
 		smartThings.setDeviceValue(pumpSwitch, 0);
 		smartThings.setDeviceValue(bedRoomLight, 75);
 		sealCompletePoller.init();
-		assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
+		// assertTrue(smartThings.getSwitchState(pumpSwitch) != 0);
 		assertTrue(esp32.readValveStatus());
 		
 		try {

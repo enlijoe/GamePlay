@@ -80,7 +80,7 @@ class ControlThread extends Thread {
 				retVal = responseMap.get(sequenceNum);
 				responseMap.remove(sequenceNum);
 				if(retVal == null) {
-					throw new RuntimeException("Timed out waiting for response from device.");
+					throw new RuntimeException("Timed out waiting for response from device on seqNum " + sequenceNum + ".");
 				}
 			} catch(InterruptedException ex) {
 			}

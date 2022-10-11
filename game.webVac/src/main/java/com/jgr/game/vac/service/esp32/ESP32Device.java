@@ -169,6 +169,7 @@ class ESP32Device implements RemoteWatchDog {
 				String name = subDevData.get("name").toString();
 				ESP32InputDevice subDevice = new ESP32InputDevice();
 				subDevice.init('I', pos, name);
+				subDevice.setBeanName(name);
 				deviceMap.put(name, subDevice);
 			}
 		}
@@ -181,6 +182,7 @@ class ESP32Device implements RemoteWatchDog {
 				String name = subDevData.get("name").toString();
 				ESP32OutputDevice subDevice = new ESP32OutputDevice();
 				subDevice.init('O', pos, name);
+				subDevice.setBeanName(name);
 				deviceMap.put(name, subDevice);
 			}
 		}
@@ -194,6 +196,7 @@ class ESP32Device implements RemoteWatchDog {
 				float minValue = Float.parseFloat(subDevData.get("min").toString());
 				float maxValue = Float.parseFloat(subDevData.get("max").toString());
 				ESP32PressureDevice subDevice = new ESP32PressureDevice(minValue, maxValue);
+				subDevice.setBeanName(name);
 				subDevice.init('P', pos, name);
 				deviceMap.put(name, subDevice);
 			}

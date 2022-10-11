@@ -1,30 +1,47 @@
 package com.jgr.game.vac.poller;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import javax.annotation.PostConstruct;
 
-import com.jgr.game.vac.interfaces.PressureSensor;
-import com.jgr.game.vac.interfaces.SmartThings;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+
+import com.jgr.game.vac.interfaces.InputDevice;
+import com.jgr.game.vac.interfaces.PressureDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
 import com.jgr.game.vac.interfaces.VaccumPoller;
-import com.jgr.game.vac.service.DeviceNames;
-import com.jgr.game.vac.service.PropertyService;
+import com.jgr.game.vac.service.DeviceMapperService;
+import com.jgr.game.vac.service.DeviceUrl;
 
 public class VaccumPollerImpl extends Poller implements VaccumPoller {
-	@Autowired private DeviceNames deviceNames;
-	@Autowired private PropertyService propertyService;
-	@Autowired private SmartThings smartThings;
 	@Autowired private SystemTime systemTime;
-	@Autowired private PressureSensor externalPressure;
+	@Autowired private DeviceMapperService deviceMapperService;
 
 	private long restStart;
 	
+	@Value("${game.minVacPressure}") private float minVacuumPressure;
+	@Value("${game.timeMutiple}") private long timeMutiple;
+	@Value("${game.pumpAutoseal}") private long pumpAutoseal;
+	
+	
+	@Value("${deviceUrl.pumpCheck}") private String pumpStatusDeviceUrl;
+	@Value("${deviceUrl.vaccumPressure}") private String vaccumPressureUrl;
+	
+	private InputDevice pumpStatusDevice;
+	private PressureDevice vacuumPressure;
+	
+	@PostConstruct
+	public void afterPropsSet() {
+		pumpStatusDevice = deviceMapperService.getDevice(new DeviceUrl(pumpStatusDeviceUrl));
+		vacuumPressure = deviceMapperService.getDevice(new DeviceUrl(vaccumPressureUrl));
+	}
+	
 	@Override
 	public boolean doCheck() {
-		if(externalPressure.isAvailable()) {
-			return externalPressure.getPressure("vacuum") >= propertyService.getMinVacuumPressure();
+		if(vacuumPressure != null) {
+			return vacuumPressure.readValue() >= minVacuumPressure;
 		} else {
-			boolean timeExpired = systemTime.currentTime() - restStart > propertyService.getPumpRestTime() * propertyService.getTimeMutiple();
-			boolean switchOn = smartThings.getSwitchState(deviceNames.getPumpSwitch()) != 0;
+			boolean timeExpired = systemTime.currentTime() - restStart > pumpAutoseal * timeMutiple;
+			boolean switchOn = pumpStatusDevice.isOn();
 			return timeExpired || switchOn;
 		}
 	}
@@ -34,10 +51,4 @@ public class VaccumPollerImpl extends Poller implements VaccumPoller {
 		restStart = systemTime.currentTime();
 	}
 	
-	public int getPumpRestTime() {
-		return propertyService.getPumpRestTime();
-	}
-	public void reset(int pumpRestTime) {
-		this.propertyService.setPumpRestTime(pumpRestTime);
-	}
 }

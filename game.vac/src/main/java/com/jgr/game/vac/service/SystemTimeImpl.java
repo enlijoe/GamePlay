@@ -1,19 +1,31 @@
 package com.jgr.game.vac.service;
 
+import javax.annotation.PostConstruct;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
-import com.jgr.game.vac.interfaces.SmartThings;
+import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
 
 public class SystemTimeImpl implements SystemTime {
-	@Autowired private PropertyService propertyService;
-	@Autowired private DeviceNames deviceNames;
-	@Autowired private SmartThings smartThings;
+	@Autowired private DeviceMapperService deviceMapperService;
+
+	@Value("${game.timeMutiple}") private long timeMutiple;
 	
 	private Logger logger = LoggerFactory.getLogger(MainLine.class);
 
+	@Value("${deviceUrl.status}") private String statusDeviceUrl;
+	
+	private InputDevice statusDevice;
+	
+	@PostConstruct
+	public void afterPropsSet() {
+		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
+	}
+	
 	@Override
 	public long currentTime() {
 		return System.currentTimeMillis();
@@ -32,8 +44,8 @@ public class SystemTimeImpl implements SystemTime {
 		
 		while(timeLeft > 0) {
 			timer.checkin();
-			if(timeLeft > 5 * propertyService.getTimeMutiple()) {
-				sleep(5 * propertyService.getTimeMutiple());
+			if(timeLeft > 5 * timeMutiple) {
+				sleep(5 * timeMutiple);
 			} else {
 				sleep(timeLeft);
 			}
@@ -57,12 +69,7 @@ public class SystemTimeImpl implements SystemTime {
 			curTime = currentTime();
 			timeLeft = endTIme-curTime;  
 			
-			int value = smartThings.getSwitchState(deviceNames.getStatusLight());
-			if(smartThings.isOn(value)) {
-//				if(value >= 75) {
-//					logger.info("Aborting");
-//					throw new AbortException();
-//				}
+			if(statusDevice.isOn()) {
 				logger.info("Restarting");
 				return true;
 			}

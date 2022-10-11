@@ -1,8 +1,6 @@
 package com.jgr.game.vac.controler;
 
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,17 +14,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 
-import com.jgr.game.vac.controler.model.EditGameModel;
-import com.jgr.game.vac.entity.GameNameProjection;
-import com.jgr.game.vac.service.AbstractGameObject;
-import com.jgr.game.vac.service.AbstractGameRunnable;
-import com.jgr.game.vac.service.GameService;
-
 @Controller
 public class HomeControler {
-	private static Logger logger = LoggerFactory.getLogger(AbstractGameObject.class);
+	private static Logger logger = LoggerFactory.getLogger(HomeControler.class);
 
-	@Autowired GameService gameService;
 	@Autowired ApplicationContext appContext;
 	
 	@GetMapping("/")
@@ -36,11 +27,6 @@ public class HomeControler {
 	
 	@GetMapping("/modify")
 	public String modifyGame(Model model) {
-		List<GameNameProjection> gameNames = gameService.getGameNames();
-		
-		model.addAttribute("selectedUrl", "/editGame");
-		model.addAttribute("gameNames", gameNames);
-		
 		return "selectGame";
 	}
 	
@@ -51,15 +37,11 @@ public class HomeControler {
 	
 	@GetMapping("/resetDB") 
 	public String resetDb(Model model) {
-		gameService.resetDb();
 		return "index";
 	}
 	
 	@GetMapping("/new")
 	public String getNewGameName(Model model) {
-		@SuppressWarnings("rawtypes")
-		Map<String, AbstractGameRunnable> gameBeans = appContext.getBeansOfType(AbstractGameRunnable.class);
-		model.addAttribute("gameBeanNames", gameBeans.keySet());
 		return "newGame";
 	}
 	
@@ -70,9 +52,6 @@ public class HomeControler {
 		if(StringUtils.isEmpty(gameName)) {
 			errors.add("Game name can't be blank.");
 		} else {
-			if(gameService.hasGame(gameName)) {
-				errors.add("Game name must be unique.");
-			} 
 		}
 		
 		if(StringUtils.isEmpty(gameBeanName)) {

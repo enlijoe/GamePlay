@@ -27,12 +27,10 @@ public class SmartThingsTestMock implements SmartThings {
 		states.put(id, value);
 	}
 	
-	@Override
 	public int getSwitchState(String id) {
 		return states.get(id);
 	}
 
-	@Override
 	public void setDeviceState(String id, boolean state) {
 		assertTrue(states.containsKey(id));
 		if(state) {
@@ -42,12 +40,10 @@ public class SmartThingsTestMock implements SmartThings {
 		}
 	}
 
-	@Override
 	public boolean isOn(int value) {
 		return value != 0;
 	}
 
-	@Override
 	public boolean isOff(int value) {
 		return value == 0;
 	}

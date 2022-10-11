@@ -1,21 +1,28 @@
 package com.jgr.game.vac.thread;
 
+import javax.annotation.PostConstruct;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
-import com.jgr.game.vac.interfaces.PressureSensor;
-import com.jgr.game.vac.interfaces.SmartThings;
+import com.jgr.game.vac.interfaces.OutputDevice;
+import com.jgr.game.vac.interfaces.PressureDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
-import com.jgr.game.vac.service.DeviceNames;
-import com.jgr.game.vac.service.PropertyService;
+import com.jgr.game.vac.service.DeviceMapperService;
+import com.jgr.game.vac.service.DeviceUrl;
 
 public class MaintainVacuumThreadImpl implements Runnable {
-	@Autowired private DeviceNames deviceNames;
-	@Autowired private PropertyService propertyService;
-	@Autowired private SmartThings smartThings;
 	@Autowired private SystemTime systemTime;
-	@Autowired private PressureSensor externalPressure;
+	@Autowired private DeviceMapperService deviceMapperService;
+	
+	@Value("${game.timeMutiple}") long timeMutiple;
+	@Value("${game.antiStruggle:false}") boolean antiStruggle;
+	@Value("${game.antiStruggleLength:60000}") long antiStruggleLength;
+	@Value("${game.antiStruggleRest:0.0}") float antiStruggleEnd;
+	
+	@Value("${game.strugglePressure}") float strugglePressure;
 	
 	Thread me;
 	
@@ -23,6 +30,35 @@ public class MaintainVacuumThreadImpl implements Runnable {
 
 	boolean running = false;
 	boolean paused = false;
+	
+	@Value("${deviceUrl.pumpSwitch}") private String pumpSwitchUrl;
+	@Value("${deviceUrl.pumpSwitch2}") private String pumpSwitch2Url;
+	@Value("${deviceUrl.vaccumPressure}") private String vaccumPressureUrl;
+	
+	private OutputDevice pumpSwitch;
+	private OutputDevice pumpSwitch2;
+	private PressureDevice vacuumPressure;
+	
+	@PostConstruct
+	public void afterPropsSet() {
+		pumpSwitch = deviceMapperService.getDevice(new DeviceUrl(pumpSwitchUrl)); 
+		pumpSwitch2 = deviceMapperService.getDevice(new DeviceUrl(pumpSwitch2Url)); 
+		vacuumPressure = deviceMapperService.getDevice(new DeviceUrl(vaccumPressureUrl)); 
+		
+		if(antiStruggle && strugglePressure < antiStruggleEnd) {
+			throw new RuntimeException("strugglePressure must be less then antiStruggleEnd");
+		}
+	}
+	
+	/*
+	 * monitor the vacuum for spikes
+	 * if there is a spike and the struggle control is on then turn on second pump for 1 min
+	 * loop until stopped 
+	 */
+	
+	boolean antiStruggleOn = false;
+	boolean antiStruggleRest = false;
+	long antiStruggleStart = 0;
 	
 	@Override
 	public void run() {
@@ -33,56 +69,31 @@ public class MaintainVacuumThreadImpl implements Runnable {
 		logger.info("Mataining vacuum Started");
 		
 		try {
-			if(propertyService.getPumpRestTime() == 0 && !externalPressure.isAvailable()) {
-				// 100% duty cycle no pressure sensor
-				if(!paused)  {
-					smartThings.setDeviceState(deviceNames.getPumpSwitch(), true);
-				}
-			}
 			while(running) {
-				if(externalPressure.isAvailable()) {
-					// wait until pressure falls to low
-					smartThings.setDeviceState(deviceNames.getPumpSwitch(), false);
-					while(poolPressure(propertyService.getVacuumPoolTime()) >= propertyService.getMinVacuumPressure()) {
-						if(!running) {
-							break;
-						}
-					}
-				} else {
-					if(propertyService.getPumpRestTime() == 0) {
-						// we are on a 100% duty cycle with no pressure sensor so short circuit this
-						smartThings.setDeviceState(deviceNames.getPumpSwitch(), true);
-						waitWithShutdown(propertyService.getPumpRunTime()*propertyService.getTimeMutiple());
-						continue;
-					} else {
-						waitWithShutdown(propertyService.getPumpRestTime() * propertyService.getTimeMutiple());
+				if(antiStruggleOn) {
+					if(antiStruggleLength < antiStruggleStart - systemTime.currentTime()) {
+						pumpSwitch2.setOff();
+						antiStruggleOn = false;
+						antiStruggleRest = true;
 					}
 				}
-				if(!running) {
-					break;
-				}
-				logger.info("Resealing");
 				
-				if(externalPressure.isAvailable()) {
-					// turn on pump until we get to the max pressure
-					if(!paused) {
-						smartThings.setDeviceState(deviceNames.getPumpSwitch(), true);
+				if(antiStruggleRest) {
+					float curVacuum = vacuumPressure.readValue();
+					if(curVacuum > antiStruggleEnd) {
+						antiStruggleRest = false;
 					}
-					while(poolPressure(propertyService.getVacuumPoolTime()) <= propertyService.getMaxVacuumPressure()) {
-						if(!running) {
-							break;
-						}
-					}
-				} else {
-					if(!paused) {
-						smartThings.setDeviceState(deviceNames.getPumpSwitch(), true);
-					}
-					waitWithShutdown(propertyService.getPumpRunTime() * propertyService.getTimeMutiple());
 				}
-				if(!running) {
-					break;
+					
+				if(antiStruggle && (!antiStruggleRest && !antiStruggleOn)) {
+					float curVacuum = vacuumPressure.readValue();
+					if(curVacuum < strugglePressure) {
+						antiStruggleOn = true;
+						antiStruggleStart = systemTime.currentTime();
+						pumpSwitch2.setOn();
+					}
 				}
-				smartThings.setDeviceState(deviceNames.getPumpSwitch(), false);
+				systemTime.sleep(1000);
 			}
 		} catch (InterruptedException iex) {
 			logger.info("Mataining vacuum Interrupted");
@@ -92,9 +103,9 @@ public class MaintainVacuumThreadImpl implements Runnable {
 		}
 	}
 	
-	public long poolPressure(long time) throws InterruptedException {
+	public float poolPressure(long time) throws InterruptedException {
 		systemTime.sleep(time);
-		return externalPressure.getPressure("vacuum");
+		return vacuumPressure.readValue();
 	}
 
 	public boolean waitWithShutdown(long time) throws InterruptedException {
@@ -121,12 +132,12 @@ public class MaintainVacuumThreadImpl implements Runnable {
 		if(paused) {
 			if(!value) {
 				paused = false;
-				smartThings.setDeviceState(deviceNames.getPumpSwitch(), true);
+				pumpSwitch.setOn();
 			}
 		} else {
 			if(value) {
 				paused = true;
-				smartThings.setDeviceState(deviceNames.getPumpSwitch(), false);
+				pumpSwitch.setOff();
 			}
 		}
 	}

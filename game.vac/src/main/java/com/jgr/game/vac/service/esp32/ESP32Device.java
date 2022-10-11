@@ -8,12 +8,15 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.jgr.game.vac.interfaces.DeviceControler;
+import com.jgr.game.vac.interfaces.Device;
 import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.PressureDevice;
+import com.jgr.game.vac.service.DeviceManager;
+import com.jgr.game.vac.service.DeviceUrl;
+import com.jgr.game.vac.service.RemoteWatchDog;
 
-class ESP32Device implements DeviceControler {
+class ESP32Device implements DeviceManager, RemoteWatchDog {
 	private static Logger logger = LoggerFactory.getLogger(GenericEsp32DeviceFactory.class);
 
 	private String UUID;
@@ -25,13 +28,32 @@ class ESP32Device implements DeviceControler {
 	
 	LoggingThread loggingThread;
 	ControlThread controlThread;
-	HashMap<String, Object> deviceMap = new HashMap<String, Object>();
+	HashMap<String, ESP32SubDevice> deviceMap = new HashMap<String, ESP32SubDevice>();
 	
-	public HashMap<String, Object> getDeviceMap() {
+	@SuppressWarnings("unchecked")
+	@Override
+	public <DeviceType> DeviceType getDevice(DeviceUrl deviceUrl) {
+		ESP32SubDevice device = deviceMap.get(deviceUrl.getSubDevice());
+		
+		if(device == null) {
+			logger.error("Can't find device for " + deviceUrl);
+		} else {
+			logger.debug("Found device " + device.getName() + " for " + deviceUrl);
+		}
+		
+		return (DeviceType) device;
+	}
+	
+	public HashMap<String, ? extends Device> getDeviceMap() {
 		return deviceMap;
 	}
 	
-	private class ESP32SubDevice {
+	@Override
+	public String getDescription() {
+		return UUID;
+	}
+	
+	private class ESP32SubDevice implements Device {
 		private char type;
 		private int id;
 		private String name;
@@ -63,6 +85,41 @@ class ESP32Device implements DeviceControler {
 		}
 	}
 	
+	@Override
+	public void checkIn() {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+	public boolean getStatus() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+	
+	@Override
+	public void reset() {
+		// TODO Auto-generated method stub
+		
+	}
+	@Override
+	public void disable() {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+	public void enable() {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	@Override
+	public void errorState() {
+		// TODO Auto-generated method stub
+		
+	}
+	
 	void handleError(String msg, Map<String, Object> data) {
 		String errMsg = "";
 		if(data.containsKey("error")) {
@@ -75,7 +132,7 @@ class ESP32Device implements DeviceControler {
 	
 	class ESP32InputDevice extends ESP32SubDevice implements InputDevice {
 		@Override
-		public int readValue() {
+		public int getValue() {
 			Map<String, Object> data = read();
 			if(data.containsKey("value")) {
 				return Integer.parseInt(data.get("value").toString());
@@ -84,15 +141,36 @@ class ESP32Device implements DeviceControler {
 			}
 			return 0; // dead code
 		}
+		
+		@Override
+		public boolean isOff() {
+			return getValue() == 0;
+		}
+		
+		@Override
+		public boolean isOn() {
+			return getValue() != 0;
+		}
+		
 	}
 	
 	class ESP32OutputDevice extends ESP32SubDevice implements OutputDevice {
 		@Override
-		public void writeValue(int value) {
+		public void setValue(int value) {
 			Map<String, Object> data = write(value);
 			if(!data.containsKey("status")) {
 				handleError("Unable to write value", data);
 			}
+		}
+		
+		@Override
+		public void setOff() {
+			setValue(0);
+		}
+		
+		@Override
+		public void setOn() {
+			setValue(1);
 		}
 	}
 	

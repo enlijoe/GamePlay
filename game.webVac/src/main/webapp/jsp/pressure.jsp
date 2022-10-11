@@ -2,7 +2,10 @@
 
 
 <html>
-	<body style="font-size: 1in;" >
+	<head>
+		<link rel="stylesheet" href="basic.css">
+	</head>
+	<body>
 		<table>
 		<tr><td>Name</td><td>Bean Name</td><td>value</td></tr>
 			<c:forEach items="${devices}" var="device">

@@ -10,8 +10,8 @@ public interface LocalWatchDog extends Runnable {
 	
 	public void removeTimer(WatchDogTimer timer);
 	public void setTimeToCheckIn(long timeToCheckIn);
-	public WatchDogTimer addTimer(GameOperation expiredTimerAction, String reason);
-	public WatchDogMaxTime creatMaxTimer(long maxTime, GameOperation expiredTimerAction, String reason);
+	public WatchDogTimer addTimer(Runnable expiredTimerAction, String reason);
+	public WatchDogMaxTime creatMaxTimer(long maxTime, Runnable expiredTimerAction, String reason);
 	public void removeMaxTimer(WatchDogMaxTime timer);
 	public void shutdown();
 	public void start();

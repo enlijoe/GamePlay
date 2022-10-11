@@ -1,54 +1,82 @@
 package com.jgr.game.vac.poller;
 
+import javax.annotation.PostConstruct;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 
+import com.jgr.game.vac.interfaces.InputDevice;
+import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.SealCompletePoller;
-import com.jgr.game.vac.interfaces.SmartThings;
 import com.jgr.game.vac.interfaces.SystemTime;
-import com.jgr.game.vac.service.DeviceNames;
-import com.jgr.game.vac.service.PropertyService;
-import com.jgr.game.vac.service.WatchDog;
+import com.jgr.game.vac.service.DeviceMapperService;
+import com.jgr.game.vac.service.DeviceUrl;
 
 public class SealCompletePollerImpl extends Poller implements SealCompletePoller {
-	@Autowired private DeviceNames deviceNames;
-	@Autowired private PropertyService propertyService;
-	@Autowired private SmartThings smartThings;
 	@Autowired private SystemTime systemTime;
-	@Autowired private WatchDog watchDog;
+	@Autowired private DeviceMapperService deviceMapperService;
 
+	@Value("${game.timeMutiple}") long timeMutiple;
+	@Value("${game.pumpAutoseal}") long autoSealTime;
+	@Value("${game.delayed}") boolean delayedStart;
+	@Value("${game.simulate}") boolean simulate;
+	
 	private Logger logger = LoggerFactory.getLogger(SealCompletePollerImpl.class);
+	
+	
+	@Value("${deviceUrl.status}") private String statusDeviceUrl;
+	@Value("${deviceUrl.pumpCheck}") private String pumpStateDeviceUrl;
+	@Value("${deviceUrl.pumpCheck}") private String pumpCheckUrl;
+	@Value("${deviceUrl.pumpSwitch}") private String pumpSwitchUrl;
+	@Value("${deviceUrl.saftyValve}") private String saftyValveUrl;
+	
+	private InputDevice statusDevice;
+	private InputDevice pumpStateDevice;
+	private OutputDevice pumpCheck;
+	private OutputDevice pumpSwitch;
+	private OutputDevice saftyValve;
+	
 	
 	private long sealStartTime;
 
+	@PostConstruct
+	public void afterPropsSet() {
+		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
+		pumpStateDevice = deviceMapperService.getDevice(new DeviceUrl(pumpStateDeviceUrl));
+		pumpCheck = deviceMapperService.getDevice(new DeviceUrl(pumpCheckUrl));
+		pumpSwitch = deviceMapperService.getDevice(new DeviceUrl(pumpSwitchUrl));
+		saftyValve = deviceMapperService.getDevice(new DeviceUrl(saftyValveUrl));
+	}
+	
 	@Override
 	public boolean doCheck() {
-		if(smartThings.isOn(smartThings.getSwitchState(deviceNames.getStatusLight()))) {
+		if(statusDevice.isOn()) {
 			logger.info("Aborting");
-//			if(lightState >= 75) {
-//				throw new AbortException();
-//			}
 			return true;
 		}
 		
-		if(propertyService.getAutoSealTime() != 0) {
-			return propertyService.isDelayedStart() || ((systemTime.currentTime() - sealStartTime) > propertyService.getAutoSealTime()*propertyService.getTimeMutiple());
+		if(autoSealTime != 0) {
+			return delayedStart || ((systemTime.currentTime() - sealStartTime) > autoSealTime*timeMutiple);
 		} else {
-			return smartThings.isOff(smartThings.getSwitchState(deviceNames.getPumpCheck()));
+			return pumpStateDevice.isOff();
 		}
 	}
 	
 	@Override
 	public void init() {
-		if(propertyService.getAutoSealTime() != 0) {
-			smartThings.setDeviceState(deviceNames.getPumpCheck(), false);
+		if(autoSealTime != 0) {
+			pumpCheck.setOff();
 			sealStartTime = systemTime.currentTime();
 		} else {
-			smartThings.setDeviceState(deviceNames.getPumpCheck(), true);
+			pumpCheck.setOn();
 		}
 		logger.info("Pump On");
-		if(!propertyService.isSimulate()) smartThings.setDeviceState(deviceNames.getPumpSwitch(), true);
-		watchDog.setSaftyValveState(true);
+
+		if(!simulate) {
+			saftyValve.setOn();
+			pumpSwitch.setOn();
+		}
 	}
 }

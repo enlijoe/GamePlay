@@ -1,5 +1,7 @@
 package com.jgr.game.vac.interfaces;
 
-public interface InputDevice extends Esp32SubDevice {
-	public int readValue();
+public interface InputDevice extends Device {
+	public int getValue();
+	public boolean isOn();
+	public boolean isOff();
 }

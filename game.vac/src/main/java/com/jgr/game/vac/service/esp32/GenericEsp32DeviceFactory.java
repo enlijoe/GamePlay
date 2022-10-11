@@ -6,38 +6,129 @@ import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketTimeoutException;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.annotation.PostConstruct;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
-import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.beans.factory.BeanNameAware;
+import org.springframework.beans.factory.annotation.Value;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import com.jgr.game.vac.service.DeviceManager;
+import com.jgr.game.vac.service.DeviceUrl;
+import com.jgr.game.vac.service.RemoteWatchDog;
 
 
-public class GenericEsp32DeviceFactory implements ApplicationContextAware {
+public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, RemoteWatchDog {
 	private static Logger logger = LoggerFactory.getLogger(GenericEsp32DeviceFactory.class);
 	private static final String UDP_QUERY_MSG = "Device Query";
 
+	@Value("${esp32.udp.socket}") private int updSocket;
+	@Value("${esp32.udp.timeout}") private int udpTimeout;
+	@Value("${esp32.udp.interface:}") private InetAddress[] broadcastInterfaces;
+	@Value("${esp32.udp.retries:3}") private int udpRetries;
+	
 	HashMap<String, ESP32Device> deviceList;
-	ConfigurableListableBeanFactory  beanFactory;
+	private String beanName;
+	
 	
 	@Override
-	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-		if(applicationContext instanceof GenericApplicationContext) {
-			beanFactory = ((GenericApplicationContext)applicationContext).getBeanFactory();
+	public void checkIn() {
+		for(ESP32Device device:deviceList.values()) {
+			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
+				remoteWatchDog.checkIn();
+			}
 		}
 	}
-
-
+	
+	@Override
+	public String getDescription() {
+		return "GenericEsp32DeviceFactory";
+	}
+	
+	@Override
+	public boolean getStatus() {
+		for(ESP32Device device:deviceList.values()) {
+			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
+				if(remoteWatchDog.getStatus()) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	@Override
+	public void reset() {
+		for(ESP32Device device:deviceList.values()) {
+			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
+				remoteWatchDog.reset();
+			}
+		}
+	}
+	
+	@Override
+	public void disable() {
+		for(ESP32Device device:deviceList.values()) {
+			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
+				remoteWatchDog.disable();
+			}
+		}
+	}
+	
+	@Override
+	public void enable() {
+		for(ESP32Device device:deviceList.values()) {
+			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
+				remoteWatchDog.enable();
+			}
+		}
+	}
+	
+	@Override
+	public void errorState() {
+		for(ESP32Device device:deviceList.values()) {
+			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
+				remoteWatchDog.errorState();
+			}
+		}
+	}
+	
+	
+	/**
+	 * Url is beanName://esp32-UUID/device-UUID
+	 */
+	@Override
+	public <DeviceType> DeviceType getDevice(DeviceUrl deviceUrl) {
+		if(beanName.equalsIgnoreCase(deviceUrl.getDeviceManagerClass())) {
+			ESP32Device subDeviceManager = deviceList.get(deviceUrl.getDeviceId());
+			if(subDeviceManager == null) {
+				logger.error("unable to find device manager for " + deviceUrl.getDeviceId());
+			} else {
+				return subDeviceManager.getDevice(deviceUrl);
+			}
+		}
+		return null;
+	}
+	
+	@Override
+	public void setBeanName(String name) {
+		beanName = name;
+	}
+	
 	@PostConstruct
 	public void init() {
 		deviceList = new HashMap<>();
@@ -45,55 +136,92 @@ public class GenericEsp32DeviceFactory implements ApplicationContextAware {
 		byte[] buffer = new byte[1024];
 		DatagramSocket querySocket = null;
 		try {
-			Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-			querySocket = new DatagramSocket(3358);
+			List<InterfaceAddress> networkList = new ArrayList<>();
+			querySocket = new DatagramSocket(updSocket);
 
-			// search on each network interface
-			while(interfaces.hasMoreElements()) {
-				NetworkInterface networkInterface = interfaces.nextElement();
-				
-				if(networkInterface.isLoopback()) {
-					// logger.info("Skipping interface " + networkInterface.getDisplayName() + " because it is a loop back device.");
-					continue;
-				}
+			if(broadcastInterfaces != null && broadcastInterfaces.length != 0) {
+				for(InetAddress addr:broadcastInterfaces) {
+					NetworkInterface networkInterface = NetworkInterface.getByInetAddress(addr);
 
-				if(!networkInterface.isUp()) {
-					// logger.info("Skipping interface " + networkInterface.getDisplayName() + " because it is not currently up.");
-					continue;
-				}
-				
-				logger.info("Searching network interface " + networkInterface.getDisplayName());
-				
-				for(InterfaceAddress networkInterfaceAddr:networkInterface.getInterfaceAddresses()) {
-					InetAddress broadcastAddr = networkInterfaceAddr.getBroadcast();
-					InetAddress interfaceAddr = networkInterfaceAddr.getAddress();
-					
-					querySocket.setSoTimeout(2000);
-					
-					if(broadcastAddr == null || interfaceAddr == null) {
-						// There is not either a broadcast address or interface address so nothing to do here
+					if(networkInterface == null) {
+						logger.warn("Ignoring interface on " + addr);
 						continue;
 					}
 					
-					logger.info("Sending " + UDP_QUERY_MSG + " on " + broadcastAddr);
+					if(networkInterface.isLoopback()) {
+						// logger.info("Skipping interface " + networkInterface.getDisplayName() + " because it is a loop back device.");
+						continue;
+					}
+	
+					if(!networkInterface.isUp()) {
+						// logger.info("Skipping interface " + networkInterface.getDisplayName() + " because it is not currently up.");
+						continue;
+					}
 					
-					DatagramPacket searchPacket = new DatagramPacket(UDP_QUERY_MSG.getBytes(), UDP_QUERY_MSG.length(), broadcastAddr, 3358);
-					DatagramPacket responcePacket = new DatagramPacket(buffer, buffer.length);
+					logger.debug("Searching network interface " + networkInterface.getDisplayName());
 					
-					for(int cnt = 0; cnt < 3; cnt++) {
-						querySocket.send(searchPacket);
-						try {
-							while(true) {
-								querySocket.receive(responcePacket);
-								if(responcePacket.getAddress().equals(networkInterfaceAddr.getAddress())) {
-									continue; // ignore our message
-								}
-								//logger.info("Mesage from " + responcePacket.getSocketAddress());
+					for(InterfaceAddress networkInterfaceAddr:networkInterface.getInterfaceAddresses()) {
+						if(networkInterfaceAddr.getBroadcast() != null && networkInterfaceAddr.getAddress() != null) {
+							networkList.add(networkInterfaceAddr);	
+						}
+					}					
+				}
+			} 
+			if(networkList.isEmpty()) {
+				logger.info("Searchin all interfaces since none given in config.");
+				Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+				// search on each network interface
+				while(interfaces.hasMoreElements()) {
+					NetworkInterface networkInterface = interfaces.nextElement();
+					
+					if(networkInterface.isLoopback()) {
+						continue;
+					}
+	
+					if(!networkInterface.isUp()) {
+						continue;
+					}
+					
+					logger.debug("Searching network interface " + networkInterface.getDisplayName());
+					
+					for(InterfaceAddress networkInterfaceAddr:networkInterface.getInterfaceAddresses()) {
+						if(networkInterfaceAddr.getBroadcast() != null && networkInterfaceAddr.getAddress() != null) {
+							networkList.add(networkInterfaceAddr);	
+						}
+					}
+				}
+			}
+			
+			for(InterfaceAddress networkInterfaceAddr:networkList) {
+				InetAddress broadcastAddr = networkInterfaceAddr.getBroadcast();
+				InetAddress interfaceAddr = networkInterfaceAddr.getAddress();
+				querySocket.setSoTimeout(udpTimeout);
+				
+				if(broadcastAddr == null || interfaceAddr == null) {
+					// There is not either a broadcast address or interface address so nothing to do here
+					continue;
+				}
+				
+				logger.debug("Sending " + UDP_QUERY_MSG + " on " + broadcastAddr + " for interface on " + interfaceAddr);
+				
+				DatagramPacket searchPacket = new DatagramPacket(UDP_QUERY_MSG.getBytes(), UDP_QUERY_MSG.length(), broadcastAddr, updSocket);
+				DatagramPacket responcePacket = new DatagramPacket(buffer, buffer.length);
+				
+				for(int cnt = 0; cnt < udpRetries; cnt++) {
+					querySocket.send(searchPacket);
+					try {
+						while(true) {
+							querySocket.receive(responcePacket);
+							if(responcePacket.getAddress().equals(interfaceAddr)) {
+								continue; // ignore our message
+							}
+							try {
 								@SuppressWarnings("unchecked")
 								Map<String, ?> deviceData = gson.fromJson(new String(responcePacket.getData(), 0, responcePacket.getLength()), Map.class);
 								if(deviceData.containsKey("DeviceType") && deviceData.containsKey("UUID")) {
 									if(!deviceList.containsKey(deviceData.get("UUID").toString())) {
-										logger.info("Found " + deviceData.get("DeviceType") + " UUID of " + deviceData.get("UUID") + " on " + responcePacket.getAddress());
+										logger.info("Found " + deviceData.get("DeviceType") + " esp32://" + deviceData.get("UUID") + " on " + responcePacket.getAddress());
+
 										ESP32Device device = new ESP32Device();
 										device.setVersion(Integer.parseInt(deviceData.get("Version").toString()));
 										device.setAddress(responcePacket.getAddress());
@@ -103,19 +231,16 @@ public class GenericEsp32DeviceFactory implements ApplicationContextAware {
 										device.setType(deviceData.get("DeviceType").toString());
 										device.start();
 										deviceList.put(deviceData.get("UUID").toString(), device);
-										// TODO need to handle more then one of the same type somehow
-										//logger.info("Adding " + deviceData.get("DeviceType").toString() + " bean");
-										beanFactory.registerSingleton(deviceData.get("DeviceType").toString(), device);
-										for(Map.Entry<String, Object> subDevice: device.deviceMap.entrySet()) {
-											//logger.info("Adding " + subDevice.getKey() + " bean");
-											beanFactory.registerSingleton(subDevice.getKey(), subDevice.getValue());
-										}
 									}
+								} else {
+									logger.debug("Bad data");
 								}
+							} catch(JsonSyntaxException ex) {
+								logger.debug("Error reading JSON data", ex);
 							}
-						} catch(SocketTimeoutException timeoutEx) {
-							// we can ignore this
 						}
+					} catch(SocketTimeoutException timeoutEx) {
+						logger.debug("Timed out.");
 					}
 				}
 			}

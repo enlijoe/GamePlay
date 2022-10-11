@@ -1,0 +1,42 @@
+lable {
+	font-size: .5in;
+}
+
+body {
+	font-size: .5in;
+}
+
+table {
+	font-size: .5in;
+	
+}
+
+tr {
+	font-size: .5in;
+	
+}
+
+td {
+	font-size: .5in;
+}
+
+input {
+	font-size: .5in;	
+}
+
+input[type=text] {
+	font-size: .5in;	
+	border-bottom-width: thick;
+	border-bottom-style: double;
+}
+
+select {
+	font-size: .5in;
+}
+
+ul:error {
+	color: red;
+	font-size: .5in;	
+}
+
+

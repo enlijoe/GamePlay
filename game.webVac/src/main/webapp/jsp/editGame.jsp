@@ -2,9 +2,12 @@
 
 
 <html>
-	<body style="font-size: 1in;" >
+	<head>
+		<link rel="stylesheet" href="basic.css">
+	</head>
+	<body>
 		<c:if test="${not empty errors}">
-			<ul style="color: red">
+			<ul class="error">
 				<c:forEach items="${errors}" var="error">
 					<li>${error}
 				</c:forEach>
@@ -22,7 +25,7 @@
 								
 								<c:choose>
 									<c:when test="${empty setting.listValues}">
-										<input style="font-size: 1in" type="text" name="${setting.name}" value="${setting.currentValue}">
+										<input type="text" name="${setting.name}" value="${setting.currentValue}">
 									</c:when> 
 									<c:otherwise>
 										<select name="${setting.name}">
@@ -42,7 +45,7 @@
 				<input type="hidden" name="gameName" value="${gameModel.gameName}">
 				<input type="hidden" name="gameBeanName" value="${gameModel.gameBeanName}">
 				<input type="hidden" name="parentBeanName" value="${gameModel.parentBeanName}">
-				<input style="font-size: 1in" type="submit" name="saveGame" value="Save Game">
+				<input type="submit" name="saveGame" value="Save Game">
 			</div>		
 		</form>
 	</body>
