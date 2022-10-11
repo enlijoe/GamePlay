@@ -179,6 +179,7 @@ public class MainLine {
 			logger.info("Here");
 			
 			// do stim add 2 extra mins for leaway
+			// TODO - create these as operations and have it we don't decide which one to do here.  Also move the maxTimer into the operation
 			// WatchDog.MaxTime maxTimer = watchDog.creatMaxTimer(120000 + timeMutiple * runTime, new WatchDogTimerExpired("Stim max time expired"), "Max Stim");
 			try {
 //				if(randomTime) {

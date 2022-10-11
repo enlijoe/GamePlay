@@ -22,7 +22,6 @@ import com.jgr.game.vac.interfaces.SealCompletePoller;
 import com.jgr.game.vac.interfaces.StartTimePoller;
 import com.jgr.game.vac.interfaces.SystemTime;
 import com.jgr.game.vac.interfaces.VaccumPoller;
-import com.jgr.game.vac.interfaces.WaterFillPoller;
 import com.jgr.game.vac.operations.Operation;
 import com.jgr.game.vac.operations.SelfTestOperation;
 import com.jgr.game.vac.operations.TimedControledWaterFill;
@@ -33,7 +32,6 @@ import com.jgr.game.vac.poller.PumpOnPollerImpl;
 import com.jgr.game.vac.poller.SealCompletePollerImpl;
 import com.jgr.game.vac.poller.StartTimePollerImpl;
 import com.jgr.game.vac.poller.VaccumPollerImpl;
-import com.jgr.game.vac.poller.WaterFillPollerImpl;
 import com.jgr.game.vac.service.DeviceMapperService;
 import com.jgr.game.vac.service.Esp32Impl;
 import com.jgr.game.vac.service.MainLine;
@@ -153,11 +151,6 @@ public class App {
 	@Bean 
 	SealCompletePoller sealCompletePoller() {
 		return new SealCompletePollerImpl();
-	}
-	
-	@Bean
-	WaterFillPoller waterFillPoller() {
-		return new WaterFillPollerImpl();
 	}
 	
 	@Bean 

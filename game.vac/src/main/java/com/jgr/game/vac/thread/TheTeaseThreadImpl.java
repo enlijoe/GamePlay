@@ -194,7 +194,6 @@ public class TheTeaseThreadImpl implements DoStimThread {
 			logger.info("Stim all done");
 			
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} finally {
 			

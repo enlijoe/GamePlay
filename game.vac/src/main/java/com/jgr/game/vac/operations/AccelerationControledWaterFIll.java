@@ -12,6 +12,7 @@ import com.jgr.game.vac.service.DeviceMapperService;
 import com.jgr.game.vac.service.DeviceUrl;
 import com.jgr.game.vac.service.WatchDog.WatchTimer;
 
+// TODO have to finish integration like TimedControledWaterFill
 public class AccelerationControledWaterFIll implements Operation {
 
 	@Autowired SystemTime systemTime;
