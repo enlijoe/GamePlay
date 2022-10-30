@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
-import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
 import com.jgr.game.vac.service.DeviceMapperService;
@@ -31,10 +30,8 @@ public class TimedControledWaterFill implements Operation {
 	@Value("${game.simulate}") private boolean simulate;
 	@Value("${game.fillRestFullFlow}") private long fillRestFullFlow;
 	
-	@Value("${deviceUrl.status}") private String statusDeviceUrl;
 	@Value("${deviceUrl.waterValve}") private String waterValveUrl;
 
-	private InputDevice statusDevice;
 	private OutputDevice waterValve;
 
 	WatchDog.MaxTime fillMaxTime = null;
@@ -56,7 +53,6 @@ public class TimedControledWaterFill implements Operation {
 	
 	@PostConstruct
 	public void afterPropsSet() {
-		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
 		waterValve = deviceMapperService.getDevice(new DeviceUrl(waterValveUrl));
 	}
 	
@@ -89,33 +85,36 @@ public class TimedControledWaterFill implements Operation {
 			logger.info("Doing fill.");
 			
 			
-			
-			if(!simulate) waterValve.setOn();
-			if(!simulate && systemTime.safeSleep(timer, initalOnTime*timeMutiple)) {
-				logger.info("Restarting during a fill");
+			try {
+				if(!simulate) waterValve.setOn();
+				if(!simulate && systemTime.safeSleep(timer, initalOnTime*timeMutiple)) {
+					logger.info("Restarting during a fill");
+					return true;
+				}
+				restTime = flowOffTime*timeMutiple + flowSlowDown*numberOfSegs;
+				logger.info("Resting (" + restTime + "ms)");
+			} finally {
 				if(!simulate) waterValve.setOff();
-				if(statusDevice.isOn()) return true;
 			}
-			restTime = flowOffTime*timeMutiple + flowSlowDown*numberOfSegs;
-			logger.info("Resting (" + restTime + "ms)");
-			if(!simulate) waterValve.setOff();
 
 			while(totalRunTime < totalOnTime*timeMutiple) {
 				if(!simulate && systemTime.safeSleep(timer, restTime)) {
 					logger.info("Restarting during a fill");
-					if(!simulate) waterValve.setOff();
-					if(statusDevice.isOn()) return true;
+					return true;
 				}
 				
-				if(!simulate) waterValve.setOn();
-				
-				if(!simulate && systemTime.safeSleep(timer, flowOnTime*timeMutiple)) {
-					logger.info("Restarting during a fill");
+				logger.info("Filling for " + flowOnTime);
+				try {
+					if(!simulate) waterValve.setOn();
+					
+					if(!simulate && systemTime.safeSleep(timer, flowOnTime*timeMutiple)) {
+						logger.info("Restarting during a fill");
+						return true;
+					}
+				} finally {
 					if(!simulate) waterValve.setOff();
-					if(statusDevice.isOn()) return true;
 				}
 				
-				if(!simulate) waterValve.setOff();
 				totalRunTime += flowOnTime*timeMutiple;
 				totalTime += flowOnTime*timeMutiple + restTime;
 				restTime-=flowSlowDown;
@@ -124,14 +123,18 @@ public class TimedControledWaterFill implements Operation {
 
 			if(fillRestFullFlow != 0) {
 				logger.info("On Full Flow for " + fillRestFullFlow );
-				if(!simulate) waterValve.setOn();
-				systemTime.safeSleep(timer, fillRestFullFlow * timeMutiple);
-				if(!simulate) waterValve.setOff();
+				try {
+					if(!simulate) waterValve.setOn();
+					if(systemTime.safeSleep(timer, fillRestFullFlow * timeMutiple)) {
+						return true;
+					}
+				} finally {
+					if(!simulate) waterValve.setOff();
+				}
 			}
 
 		} finally {
 			logger.info("Fill Completed");
-			if(!simulate) waterValve.setOff();
 			retVal = fillMaxTime.isExpired();
 			watchDog.removeMaxTimer(fillMaxTime);
 		}

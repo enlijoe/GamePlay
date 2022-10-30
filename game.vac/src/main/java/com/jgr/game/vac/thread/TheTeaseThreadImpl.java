@@ -2,39 +2,30 @@ package com.jgr.game.vac.thread;
 
 import java.util.Random;
 
-import javax.annotation.PostConstruct;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
-import com.jgr.game.vac.interfaces.DoStimThread;
 import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
-import com.jgr.game.vac.service.DeviceMapperService;
-import com.jgr.game.vac.service.DeviceUrl;
+import com.jgr.game.vac.operations.TimedOperation;
 import com.jgr.game.vac.service.WatchDog;
+import com.jgr.game.vac.stereotype.InjectDevice;
 
-public class TheTeaseThreadImpl implements DoStimThread {
+public class TheTeaseThreadImpl implements TimedOperation {
 	private Logger logger = LoggerFactory.getLogger(TheTeaseThreadImpl.class);
 
 	@Autowired private SystemTime systemTime;
-	@Autowired private DeviceMapperService deviceMapperService;
 	
 	@Value("${game.timeMutiple}") private long timeMutiple;
 	@Value("${game.simulate}") private boolean simulate;
 	
-	@Value("${deviceUrl.status}") private String statusDeviceUrl;
-	@Value("${deviceUrl.nipplesSwitch}") private String nipplesSwitchUrl;
-	@Value("${deviceUrl.probeSwitch}") private String probeSwitchUrl;
-	@Value("${deviceUrl.vibeSwitch}") private String vibeSwitchUrl;
-	
-	private InputDevice statusDevice;
-	private OutputDevice nipplesSwitch;
-	private OutputDevice probeSwitch;
-	private OutputDevice vibeSwitch;
+	@InjectDevice("${deviceUrl.status}") private InputDevice statusDevice;
+	@InjectDevice("${deviceUrl.nipplesSwitch}") private OutputDevice nipplesSwitch;
+	@InjectDevice("${deviceUrl.probeSwitch}") private OutputDevice probeSwitch;
+	@InjectDevice("${deviceUrl.vibeSwitch}") private OutputDevice vibeSwitch;
 	
 	
 	
@@ -54,16 +45,8 @@ public class TheTeaseThreadImpl implements DoStimThread {
 
 	Random rnd = new Random(System.currentTimeMillis());
 	
-	@PostConstruct
-	public void afterPropsSet() {
-		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
-		nipplesSwitch = deviceMapperService.getDevice(new DeviceUrl(nipplesSwitchUrl));
-		probeSwitch = deviceMapperService.getDevice(new DeviceUrl(probeSwitchUrl));
-		vibeSwitch = deviceMapperService.getDevice(new DeviceUrl(vibeSwitchUrl));
-	}
-	
 	@Override
-	public void run(WatchDog.WatchTimer timer) {
+	public boolean run(WatchDog.WatchTimer timer) {
 		try {
 			long now = systemTime.currentTime();
 			long partEndTime = now + 60 * 60 * timeMutiple;
@@ -138,7 +121,7 @@ public class TheTeaseThreadImpl implements DoStimThread {
 					nextStatusCheck = now + 5 * timeMutiple;
 					if(statusDevice.isOn()) {
 						logger.info("Abort Received");
-						return;
+						return true;
 					}
 				}
 
@@ -155,18 +138,18 @@ public class TheTeaseThreadImpl implements DoStimThread {
 			while(statusDevice.isOff()) {
 				logger.info("Nip " + stim1Time + " Probe " + stim2Time + " Vibe " + vibeTime + " rest " + restTime);
 				if(!simulate) nipplesSwitch.setOn();
-				if(systemTime.safeSleep(timer, stim1Time)) return;
+				if(systemTime.safeSleep(timer, stim1Time)) return true;
 
 				if(!simulate) probeSwitch.setOn();
-				if(systemTime.safeSleep(timer, stim2Time)) return;
+				if(systemTime.safeSleep(timer, stim2Time)) return true;
 				
 				if(!simulate) vibeSwitch.setOn();
-				if(systemTime.safeSleep(timer, vibeTime)) return;
+				if(systemTime.safeSleep(timer, vibeTime)) return true;
 
 				if(!simulate) nipplesSwitch.setOff();
 				if(!simulate) probeSwitch.setOff();
 				if(!simulate) vibeSwitch.setOff();
-				if(systemTime.safeSleep(timer, restTime)) return;
+				if(systemTime.safeSleep(timer, restTime)) return true;
 
 
 				stim1Time = stim1Time + (long) ((float)stim1Time*0.2);			
@@ -198,11 +181,17 @@ public class TheTeaseThreadImpl implements DoStimThread {
 		} finally {
 			
 		}
-		
+		return false;
 	}
 	
 	private long nextTime(long min, long max) {
 		long length = (long) (min + (rnd.nextFloat() * (max-min)));
 		return length * timeMutiple + systemTime.currentTime();
+	}
+	
+	
+	@Override
+	public long getMaxRunTime() {
+		return 0;
 	}
 }

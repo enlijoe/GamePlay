@@ -1,38 +1,31 @@
 package com.jgr.game.vac.service;
 
-import javax.annotation.PostConstruct;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 
 import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.LightOffPoller;
 import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.PumpOnPoller;
 import com.jgr.game.vac.interfaces.SealCompletePoller;
+import com.jgr.game.vac.stereotype.InjectDevice;
 
 public class SleepMode {
+	private Logger logger = LoggerFactory.getLogger(SleepMode.class);
+
 	@Autowired private PumpOnPoller pumpOnPoller;
 	@Autowired private SealCompletePoller sealCompletePoller;
 	@Autowired private LightOffPoller lightOffPoller;
 	@Autowired private WatchDog watchDog;
-	@Autowired private DeviceMapperService deviceMapperService;
 
-	private Logger logger = LoggerFactory.getLogger(SleepMode.class);
+	@InjectDevice("${deviceUrl.status}") InputDevice statusDevice;
+	@InjectDevice("${deviceUrl.pumpSwitch}") OutputDevice pumpSwitch;
+	@InjectDevice("${deviceUrl.pumpCheck}") OutputDevice pumpCheck;
+	@InjectDevice("${deviceUrl.statusLightCheck}") OutputDevice statusCheck;
+	
 	private WatchDog.WatchTimer timer;
-	
-	@Value("${deviceUrl.status}") String statusDeviceUrl;
-	@Value("${deviceUrl.pumpSwitch}") String pumpSwitchUrl;
-	@Value("${deviceUrl.pumpCheck}") String pumpCheckUrl;
-	@Value("${deviceUrl.statusLightCheck}") String statusCheckUrl;
-	
-	InputDevice statusDevice;
-	OutputDevice pumpSwitch;
-	OutputDevice pumpCheck;
-	OutputDevice statusCheck;
-	
+
 	class WatchDogTimerExpired implements Runnable {
 		Thread myThread;
 		
@@ -49,15 +42,6 @@ public class SleepMode {
 				logger.error("Unable to turn off valve", ex);
 			}
 		}
-	}
-	
-	
-	@PostConstruct
-	public void afterPropsSet() {
-		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
-		pumpSwitch = deviceMapperService.getDevice(new DeviceUrl(pumpSwitchUrl));
-		pumpCheck = deviceMapperService.getDevice(new DeviceUrl(pumpCheckUrl));
-		statusCheck = deviceMapperService.getDevice(new DeviceUrl(statusCheckUrl));
 	}
 	
 	public void runProgram() throws InterruptedException {

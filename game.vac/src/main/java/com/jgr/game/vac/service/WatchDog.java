@@ -213,7 +213,7 @@ public class WatchDog extends Thread {
 		running = false;
 		logger.info("Entering error state, sutting everything down.");
 		watchDogState = false;	// this may cause the application to turn off the safety value again before exiting
-		// TODO - we need to exit the app because something is wrong with the system
+		System.exit(-1);
 	}
 	
 	public void shutdown() {

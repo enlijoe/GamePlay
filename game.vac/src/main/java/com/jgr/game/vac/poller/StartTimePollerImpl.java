@@ -4,8 +4,6 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
-import javax.annotation.PostConstruct;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,8 +13,7 @@ import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.StartTimePoller;
 import com.jgr.game.vac.interfaces.SystemTime;
-import com.jgr.game.vac.service.DeviceMapperService;
-import com.jgr.game.vac.service.DeviceUrl;
+import com.jgr.game.vac.stereotype.InjectDevice;
 import com.jgr.game.vac.thread.MaintainVacuumThreadImpl;
 
 public class StartTimePollerImpl extends Poller implements StartTimePoller {
@@ -24,8 +21,6 @@ public class StartTimePollerImpl extends Poller implements StartTimePoller {
 
 	@Autowired private SystemTime systemTime;
 	@Autowired private MaintainVacuumThreadImpl mintainVacuumRunable;
-	@Autowired private DeviceMapperService deviceMapperService;
-	
 	
 	@Value("${game.timeMutiple}") private long timeMutiple;
 	@Value("${game.delaySeconds}") private long delaySeconds;
@@ -34,21 +29,9 @@ public class StartTimePollerImpl extends Poller implements StartTimePoller {
 	@Value("${game.allowEarlyStart}") private boolean allowEarlyStart;
 	@Value("${game.delayed}") private boolean delayedStart;
 	
-	@Value("${deviceUrl.status}") private String statusDeviceUrl;
-	@Value("${deviceUrl.pumpState}") private String pumpStatusDeviceUrl;
-	@Value("${deviceUrl.pumpCheck}") private String pumpCheckUrl;
-	
-	private InputDevice statusDevice;
-	private InputDevice pumpStatusDevice;
-	private OutputDevice pumpCheck;
-	
-	
-	@PostConstruct
-	public void afterPropsSet() {
-		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
-		pumpStatusDevice = deviceMapperService.getDevice(new DeviceUrl(pumpStatusDeviceUrl));
-		pumpCheck = deviceMapperService.getDevice(new DeviceUrl(pumpCheckUrl));
-	}
+	@InjectDevice("${deviceUrl.status}") private InputDevice statusDevice;
+	@InjectDevice("${deviceUrl.pumpState}") private InputDevice pumpStatusDevice;
+	@InjectDevice("${deviceUrl.pumpCheck}") private OutputDevice pumpCheck;
 	
 	Calendar now = null;
 	Calendar start = null;

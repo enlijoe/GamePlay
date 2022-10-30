@@ -1,30 +1,19 @@
 package com.jgr.game.vac.service;
 
-import javax.annotation.PostConstruct;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
+import com.jgr.game.vac.stereotype.InjectDevice;
 
 public class SystemTimeImpl implements SystemTime {
-	@Autowired private DeviceMapperService deviceMapperService;
-
-	@Value("${game.timeMutiple}") private long timeMutiple;
-	
 	private Logger logger = LoggerFactory.getLogger(MainLine.class);
 
-	@Value("${deviceUrl.status}") private String statusDeviceUrl;
-	
-	private InputDevice statusDevice;
-	
-	@PostConstruct
-	public void afterPropsSet() {
-		statusDevice = deviceMapperService.getDevice(new DeviceUrl(statusDeviceUrl));
-	}
+	@Value("${game.timeMutiple}") private long timeMutiple;
+
+	@InjectDevice("${deviceUrl.status}") private InputDevice statusDevice;
 	
 	@Override
 	public long currentTime() {
@@ -54,6 +43,12 @@ public class SystemTimeImpl implements SystemTime {
 		}
 	}
 	
+	/**
+	 * Sleeps for time in ms checking in with the watch dog timer while monitoring the status input
+	 * 
+	 * Returns true if sleep interrupted by status change
+	 * false if normal 
+	 */
 	public boolean safeSleep(WatchDog.WatchTimer timer, long time) throws InterruptedException {
 		long curTime = currentTime();
 		long endTIme =  curTime+ time;
@@ -61,8 +56,8 @@ public class SystemTimeImpl implements SystemTime {
 		
 		while(timeLeft > 0) {
 			timer.checkin();
-			if(timeLeft > 5000) {
-				sleep(5000);
+			if(timeLeft > 1000) {
+				sleep(1000);
 			} else {
 				sleep(timeLeft);
 			}

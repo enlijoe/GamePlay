@@ -19,8 +19,6 @@ public class SmartThingsTestMock implements SmartThings {
 	
 	@Override
 	public void listAllDevices() {
-		// TODO Auto-generated method stub
-		
 	}
 	
 	public void setDeviceValue(String id, int value) {

@@ -34,15 +34,26 @@ public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, 
 	@Value("${esp32.udp.timeout}") private int udpTimeout;
 	@Value("${esp32.udp.interface:}") private InetAddress[] broadcastInterfaces;
 	@Value("${esp32.udp.retries:3}") private int udpRetries;
+	@Value("${device.logInterval}") private int deviceLoggingInterval;
+	@Value("${device.logFileBase}") private String deviceLoggingBase;
 	
 	HashMap<String, ESP32Device> deviceList;
 	private String beanName;
 	
+	@Override
+	public void setDeviceLogging(boolean value) {
+		throw new RuntimeException("Logging not supported");
+	}
+	
+	@Override
+	public boolean isDeviceLogging() {
+		return false;
+	}
 	
 	@Override
 	public void checkIn() {
 		for(ESP32Device device:deviceList.values()) {
-			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+			if(RemoteWatchDog.class.isAssignableFrom(device.getClass())) {
 				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
 				remoteWatchDog.checkIn();
 			}
@@ -53,11 +64,11 @@ public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, 
 	public String getDescription() {
 		return "GenericEsp32DeviceFactory";
 	}
-	
+
 	@Override
 	public boolean getStatus() {
 		for(ESP32Device device:deviceList.values()) {
-			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+			if(RemoteWatchDog.class.isAssignableFrom(device.getClass())) {
 				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
 				if(remoteWatchDog.getStatus()) {
 					return true;
@@ -69,8 +80,14 @@ public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, 
 	
 	@Override
 	public void reset() {
+		if(deviceList.isEmpty()) {
+			logger.error("No devices regisered to send reset to.");
+		} else {
+			logger.info("Reset called sending reset to all devices");
+		}
 		for(ESP32Device device:deviceList.values()) {
-			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+			if(RemoteWatchDog.class.isAssignableFrom(device.getClass())) {
+				logger.info("Calling reset on watch dog " + device.getDescription());
 				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
 				remoteWatchDog.reset();
 			}
@@ -80,7 +97,7 @@ public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, 
 	@Override
 	public void disable() {
 		for(ESP32Device device:deviceList.values()) {
-			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+			if(RemoteWatchDog.class.isAssignableFrom(device.getClass())) {
 				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
 				remoteWatchDog.disable();
 			}
@@ -90,7 +107,7 @@ public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, 
 	@Override
 	public void enable() {
 		for(ESP32Device device:deviceList.values()) {
-			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+			if(RemoteWatchDog.class.isAssignableFrom(device.getClass())) {
 				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
 				remoteWatchDog.enable();
 			}
@@ -100,7 +117,7 @@ public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, 
 	@Override
 	public void errorState() {
 		for(ESP32Device device:deviceList.values()) {
-			if(device.getClass().isInstance(RemoteWatchDog.class)) {
+			if(RemoteWatchDog.class.isAssignableFrom(device.getClass())) {
 				RemoteWatchDog remoteWatchDog = (RemoteWatchDog) device;
 				remoteWatchDog.errorState();
 			}
@@ -223,6 +240,8 @@ public class GenericEsp32DeviceFactory implements DeviceManager, BeanNameAware, 
 										logger.info("Found " + deviceData.get("DeviceType") + " esp32://" + deviceData.get("UUID") + " on " + responcePacket.getAddress());
 
 										ESP32Device device = new ESP32Device();
+										device.setDeviceLoggingBase(deviceLoggingBase);
+										device.setDeviceLoggingInterval(deviceLoggingInterval);
 										device.setVersion(Integer.parseInt(deviceData.get("Version").toString()));
 										device.setAddress(responcePacket.getAddress());
 										device.setUUID(deviceData.get("UUID").toString());

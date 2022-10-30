@@ -1,7 +1,5 @@
 package com.jgr.game.vac.poller;
 
-import javax.annotation.PostConstruct;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -9,12 +7,10 @@ import com.jgr.game.vac.interfaces.InputDevice;
 import com.jgr.game.vac.interfaces.PressureDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
 import com.jgr.game.vac.interfaces.VaccumPoller;
-import com.jgr.game.vac.service.DeviceMapperService;
-import com.jgr.game.vac.service.DeviceUrl;
+import com.jgr.game.vac.stereotype.InjectDevice;
 
 public class VaccumPollerImpl extends Poller implements VaccumPoller {
 	@Autowired private SystemTime systemTime;
-	@Autowired private DeviceMapperService deviceMapperService;
 
 	private long restStart;
 	
@@ -22,18 +18,8 @@ public class VaccumPollerImpl extends Poller implements VaccumPoller {
 	@Value("${game.timeMutiple}") private long timeMutiple;
 	@Value("${game.pumpAutoseal}") private long pumpAutoseal;
 	
-	
-	@Value("${deviceUrl.pumpCheck}") private String pumpStatusDeviceUrl;
-	@Value("${deviceUrl.vaccumPressure}") private String vaccumPressureUrl;
-	
-	private InputDevice pumpStatusDevice;
-	private PressureDevice vacuumPressure;
-	
-	@PostConstruct
-	public void afterPropsSet() {
-		pumpStatusDevice = deviceMapperService.getDevice(new DeviceUrl(pumpStatusDeviceUrl));
-		vacuumPressure = deviceMapperService.getDevice(new DeviceUrl(vaccumPressureUrl));
-	}
+	@InjectDevice("${deviceUrl.pumpCheck}") private InputDevice pumpStatusDevice;
+	@InjectDevice("${deviceUrl.vaccumPressure}") private PressureDevice vacuumPressure;
 	
 	@Override
 	public boolean doCheck() {

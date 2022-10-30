@@ -42,6 +42,11 @@ public class SmartThingsDeviceMgrImpl implements DeviceManager, BeanNameAware {
 	private class SmartThingsDevice implements InputDevice, OutputDevice {
 		String deviceId;
 		
+		@Override
+		public DeviceManager getOwner() {
+			return SmartThingsDeviceMgrImpl.this;
+		}
+		
 		SmartThingsDevice(String deviceId) {
 			this.deviceId = deviceId;
 		}
@@ -82,6 +87,16 @@ public class SmartThingsDeviceMgrImpl implements DeviceManager, BeanNameAware {
 	}
 	
 	@Override
+	public boolean isDeviceLogging() {
+		return false;
+	}
+	
+	@Override
+	public void setDeviceLogging(boolean value) {
+		logger.info("The Smart things device does not support logging");
+	}
+	
+	@Override
 	public void setBeanName(String name) {
 		this.beanName = name; 
 	}
@@ -93,7 +108,8 @@ public class SmartThingsDeviceMgrImpl implements DeviceManager, BeanNameAware {
 		if(beanName.equalsIgnoreCase(deviceUrl.getDeviceManagerClass())) {
 			String deviceId = deviceUrl.getDeviceId();
 			if(StringUtils.isEmpty(deviceId)) { 
-				// TODO we have a url error
+				logger.error("Device url error (" + deviceUrl.toString() + ") device id is required");
+				return null;
 			}
 			device = deviceMap.get(deviceId);
 			if(device == null) {

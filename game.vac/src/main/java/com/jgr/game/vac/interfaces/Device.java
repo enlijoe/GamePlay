@@ -1,5 +1,7 @@
 package com.jgr.game.vac.interfaces;
 
-public interface Device {
+import com.jgr.game.vac.service.DeviceManager;
 
+public interface Device {
+	public DeviceManager getOwner();
 }

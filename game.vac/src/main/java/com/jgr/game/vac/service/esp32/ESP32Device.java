@@ -19,6 +19,9 @@ import com.jgr.game.vac.service.RemoteWatchDog;
 class ESP32Device implements DeviceManager, RemoteWatchDog {
 	private static Logger logger = LoggerFactory.getLogger(GenericEsp32DeviceFactory.class);
 
+	private int deviceLoggingInterval;
+	private String deviceLoggingBase;
+	
 	private String UUID;
 	private String type;
 	private int version;
@@ -29,6 +32,20 @@ class ESP32Device implements DeviceManager, RemoteWatchDog {
 	LoggingThread loggingThread;
 	ControlThread controlThread;
 	HashMap<String, ESP32SubDevice> deviceMap = new HashMap<String, ESP32SubDevice>();
+	
+	@Override
+	public void setDeviceLogging(boolean value) {
+		if(controlThread != null) {
+			controlThread.setDeviceLogging(value);
+		} else {
+			logger.error("Unable to start device logging since control thread is not active yet.");
+		}
+	}
+	
+	@Override
+	public boolean isDeviceLogging() {
+		return controlThread.isDeviceLogging();
+	}
 	
 	@SuppressWarnings("unchecked")
 	@Override
@@ -64,6 +81,11 @@ class ESP32Device implements DeviceManager, RemoteWatchDog {
 			this.name = name;
 		}
 		
+		@Override
+		public DeviceManager getOwner() {
+			return ESP32Device.this;
+		}
+		
 		Map<String, Object> read() {
 			return controlThread.sendCommand("R" + type + id);
 		}
@@ -87,37 +109,62 @@ class ESP32Device implements DeviceManager, RemoteWatchDog {
 	
 	@Override
 	public void checkIn() {
-		// TODO Auto-generated method stub
-		
+		Map<String, Object> data = controlThread.sendCommand("WC10");
+		if(!"OK.".equalsIgnoreCase(data.get("status").toString())) {
+			throw new RuntimeException("Error checking in with remote watch dog.");
+		}
 	}
 	
 	@Override
 	public boolean getStatus() {
-		// TODO Auto-generated method stub
-		return false;
+		Map<String, Object> data = controlThread.sendCommand("RC0");
+		return !"0".equals(data.get("expired"));
 	}
 	
 	@Override
 	public void reset() {
-		// TODO Auto-generated method stub
-		
+		// we need to set everything to off and reset any watch dog errors here
+		for(ESP32SubDevice device:deviceMap.values()) {
+			if(device instanceof OutputDevice) {
+				OutputDevice outputDevice = (OutputDevice) device;
+				outputDevice.setOff();
+			}
+		}
+		Map<String, Object> data = controlThread.sendCommand("WC30");
+		if(!"OK.".equalsIgnoreCase(data.get("status").toString())) {
+			throw new RuntimeException("Error resetting remote watch dog. (status=" + data.get("status").toString() + ")");
+		}
 	}
+
 	@Override
 	public void disable() {
-		// TODO Auto-generated method stub
-		
+		Map<String, Object> data = controlThread.sendCommand("WC00");
+		if(!"OK.".equalsIgnoreCase(data.get("status").toString())) {
+			throw new RuntimeException("Error trying to disable remote watch dog.");
+		}
 	}
 	
 	@Override
 	public void enable() {
-		// TODO Auto-generated method stub
-		
+		Map<String, Object> data = controlThread.sendCommand("WC01");
+		if(!"OK.".equalsIgnoreCase(data.get("status").toString())) {
+			throw new RuntimeException("Error trying to enable remote watch dog.");
+		}
 	}
 	
 	@Override
 	public void errorState() {
-		// TODO Auto-generated method stub
-		
+		// turn everything off and then enter an error state where nothing will be able to be turned on again until reset
+		for(ESP32SubDevice device:deviceMap.values()) {
+			if(device instanceof OutputDevice) {
+				OutputDevice outputDevice = (OutputDevice) device;
+				outputDevice.setOff();
+			}
+		}
+		Map<String, Object> data = controlThread.sendCommand("WC20");
+		if(!"OK.".equalsIgnoreCase(data.get("status").toString())) {
+			throw new RuntimeException("Error sending error state to remote watch dog.");
+		}
 	}
 	
 	void handleError(String msg, Map<String, Object> data) {
@@ -175,6 +222,8 @@ class ESP32Device implements DeviceManager, RemoteWatchDog {
 	}
 	
 	class ESP32PressureDevice extends ESP32SubDevice implements PressureDevice {
+		TransferFn transferFn = null;
+		
 		float minValue;
 		float maxValue;
 		
@@ -195,20 +244,32 @@ class ESP32Device implements DeviceManager, RemoteWatchDog {
 
 		@Override
 		public float readValue() {
+			int value;
+			
 			Map<String, Object> data = read();
 			if(data.containsKey("value")) {
-				int value = Integer.parseInt(data.get("value").toString());
-				return (((float) value / (float) 0x3fff) * (maxValue - minValue)) + minValue;
+				value = Integer.parseInt(data.get("value").toString());
 			} else {
 				handleError("Unable to read value", data);
 				return 0;
 			}
+
+			if(transferFn != null) {
+				return transferFn.calc(value);
+			} else {
+				return value;
+			}
+		}
+		
+		@Override
+		public void setTransferFn(TransferFn transferFn) {
+			this.transferFn = transferFn;
 		}
 	}
 
 	public void start() {
 		loggingThread = new LoggingThread(this);
-		controlThread = new ControlThread(this);
+		controlThread = new ControlThread(this, deviceLoggingInterval, deviceLoggingBase);
 		 
 		//loggingThread.start();
 		
@@ -302,6 +363,22 @@ class ESP32Device implements DeviceManager, RemoteWatchDog {
 	}
 	public void setAddress(InetAddress address) {
 		this.address = address;
+	}
+
+	protected int getDeviceLoggingInterval() {
+		return deviceLoggingInterval;
+	}
+
+	protected void setDeviceLoggingInterval(int deviceLoggingInterval) {
+		this.deviceLoggingInterval = deviceLoggingInterval;
+	}
+
+	protected String getDeviceLoggingBase() {
+		return deviceLoggingBase;
+	}
+
+	protected void setDeviceLoggingBase(String deviceLoggingBase) {
+		this.deviceLoggingBase = deviceLoggingBase;
 	}
 	
 	

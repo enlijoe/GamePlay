@@ -1,7 +1,5 @@
 package com.jgr.game.vac.operations;
 
-import javax.annotation.PostConstruct;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,32 +7,19 @@ import org.springframework.beans.factory.annotation.Value;
 
 import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
-import com.jgr.game.vac.service.DeviceMapperService;
-import com.jgr.game.vac.service.DeviceUrl;
 import com.jgr.game.vac.service.WatchDog.WatchTimer;
+import com.jgr.game.vac.stereotype.InjectDevice;
 
 public class SelfTestOperation implements Operation {
 	private Logger logger = LoggerFactory.getLogger(SelfTestOperation.class);
 
-	@Autowired private DeviceMapperService deviceMapperService;
 	@Autowired private SystemTime systemTime;
 
 	@Value("${game.timeMutiple}") long timeMutiple;
 	
-	@Value("${deviceUrl.nipplesSwitch}") private String nipplesSwitchUrl;
-	@Value("${deviceUrl.probeSwitch}") private String probeSwitchUrl;
-	@Value("${deviceUrl.vibeSwitch}") private String vibeSwitchUrl;
-	
-	private OutputDevice nipplesSwitch;
-	private OutputDevice probeSwitch;
-	private OutputDevice vibeSwitch;
-	
-	@PostConstruct
-	public void afterPropsSet() {
-		nipplesSwitch = deviceMapperService.getDevice(new DeviceUrl(nipplesSwitchUrl));
-		probeSwitch = deviceMapperService.getDevice(new DeviceUrl(probeSwitchUrl));
-		vibeSwitch = deviceMapperService.getDevice(new DeviceUrl(vibeSwitchUrl));
-	}
+	@InjectDevice("${deviceUrl.nipplesSwitch}") private OutputDevice nipplesSwitch;
+	@InjectDevice("${deviceUrl.probeSwitch}") private OutputDevice probeSwitch;
+	@InjectDevice("${deviceUrl.vibeSwitch}") private OutputDevice vibeSwitch;
 	
 	@Override
 	public boolean run(WatchTimer timer) throws InterruptedException {

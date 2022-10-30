@@ -10,12 +10,10 @@ import org.springframework.beans.factory.annotation.Value;
 import com.jgr.game.vac.interfaces.OutputDevice;
 import com.jgr.game.vac.interfaces.PressureDevice;
 import com.jgr.game.vac.interfaces.SystemTime;
-import com.jgr.game.vac.service.DeviceMapperService;
-import com.jgr.game.vac.service.DeviceUrl;
+import com.jgr.game.vac.stereotype.InjectDevice;
 
 public class MaintainVacuumThreadImpl implements Runnable {
 	@Autowired private SystemTime systemTime;
-	@Autowired private DeviceMapperService deviceMapperService;
 	
 	@Value("${game.timeMutiple}") long timeMutiple;
 	@Value("${game.antiStruggle:false}") boolean antiStruggle;
@@ -31,20 +29,12 @@ public class MaintainVacuumThreadImpl implements Runnable {
 	boolean running = false;
 	boolean paused = false;
 	
-	@Value("${deviceUrl.pumpSwitch}") private String pumpSwitchUrl;
-	@Value("${deviceUrl.pumpSwitch2}") private String pumpSwitch2Url;
-	@Value("${deviceUrl.vaccumPressure}") private String vaccumPressureUrl;
-	
-	private OutputDevice pumpSwitch;
-	private OutputDevice pumpSwitch2;
-	private PressureDevice vacuumPressure;
+	@InjectDevice("${deviceUrl.pumpSwitch}") private OutputDevice pumpSwitch;
+	@InjectDevice("${deviceUrl.pumpSwitch2}") private OutputDevice pumpSwitch2;
+	@InjectDevice("${deviceUrl.vaccumPressure}") private PressureDevice vacuumPressure;
 	
 	@PostConstruct
 	public void afterPropsSet() {
-		pumpSwitch = deviceMapperService.getDevice(new DeviceUrl(pumpSwitchUrl)); 
-		pumpSwitch2 = deviceMapperService.getDevice(new DeviceUrl(pumpSwitch2Url)); 
-		vacuumPressure = deviceMapperService.getDevice(new DeviceUrl(vaccumPressureUrl)); 
-		
 		if(antiStruggle && strugglePressure < antiStruggleEnd) {
 			throw new RuntimeException("strugglePressure must be less then antiStruggleEnd");
 		}
